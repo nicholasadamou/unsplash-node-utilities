@@ -1,0 +1,60 @@
+{
+  "name": "@nicholasadamou/unsplash-node-utilities",
+  "version": "1.0.0",
+  "description": "Node.js utilities for Unsplash image management, caching, and bulk downloading",
+  "main": "unsplash/unsplash-lib.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "unsplash-cache": "./unsplash/cache-unsplash-images.js",
+    "unsplash-verify": "./unsplash/verify-unsplash-account.js",
+    "unsplash-url-to-download": "./unsplash/unsplash-url-to-download.js",
+    "unsplash-build-cache": "./build-cache-images.js",
+    "unsplash-download": "./download-images.js",
+    "unsplash-clean": "./clean-images.js"
+  },
+  "scripts": {
+    "test": "node test-integration.js",
+    "test:fallback": "node test-fallback.js",
+    "cache:build": "node build-cache-images.js",
+    "cache:runtime": "node unsplash/cache-unsplash-images.js",
+    "download": "node download-images.js",
+    "clean": "node clean-images.js",
+    "verify": "node unsplash/verify-unsplash-account.js",
+    "url-to-download": "node unsplash/unsplash-url-to-download.js"
+  },
+  "keywords": [
+    "unsplash",
+    "image",
+    "download",
+    "cache",
+    "nodejs",
+    "utilities",
+    "batch-download",
+    "image-optimization"
+  ],
+  "author": "Nicholas Adamou <nicholasadamou@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicholasadamou/unsplash-node-utilities.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nicholasadamou/unsplash-node-utilities/issues"
+  },
+  "homepage": "https://github.com/nicholasadamou/unsplash-node-utilities#readme",
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "peerDependencies": {
+    "ioredis": "^5.7.0"
+  },
+  "files": [
+    "unsplash/",
+    "*.js",
+    "README.md",
+    "LICENSE"
+  ]
+}
