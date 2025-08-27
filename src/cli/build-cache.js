@@ -22,6 +22,21 @@ require("dotenv").config();
 async function main() {
   console.log("🚀 Build-time Unsplash Image Caching Tool\n");
 
+  // Check if manifest already exists
+  const manifestPath = path.join(process.cwd(), "public", "unsplash-manifest.json");
+  let existingManifest = null;
+  let existingImages = {};
+  
+  try {
+    const manifestContent = await fs.readFile(manifestPath, "utf-8");
+    existingManifest = JSON.parse(manifestContent);
+    existingImages = existingManifest.images || {};
+    console.log(`📋 Found existing manifest with ${Object.keys(existingImages).length} cached images`);
+  } catch (error) {
+    // Manifest doesn't exist or can't be read, which is fine
+    console.log("📋 No existing manifest found or it couldn't be read");
+  }
+
   // Check if API key is configured
   if (!process.env.UNSPLASH_ACCESS_KEY) {
     console.warn("⚠️  UNSPLASH_ACCESS_KEY environment variable not configured");
@@ -111,6 +126,15 @@ async function main() {
       continue;
     }
 
+    // Check if we already have this image in the existing manifest
+    if (existingImages && existingImages[photoId]) {
+      console.log(`🔄 Using cached data for photo: ${photoId}`);
+      imageManifest[photoId] = existingImages[photoId];
+      cached++;
+      continue;
+    }
+
+    // If not in cache, fetch from API
     const imageData = await fetchImageData(photoId);
     if (imageData) {
       imageManifest[photoId] = imageData;
