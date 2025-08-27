@@ -17,13 +17,16 @@
  *   - JSON output option for scripting
  */
 
+// Load environment variables
+require('dotenv').config();
+
 const {
   extractPhotoId,
   generateDownloadUrl,
   fetchIxidFromPage,
   convertToDownloadUrl,
   checkFetchAvailable,
-} = require("./unsplash-lib");
+} = require("../lib/index.js");
 
 /**
  * CLI interface

@@ -13,7 +13,7 @@ const {
   extractUnsplashPhotoId,
   scanMdxFiles,
   checkFetchAvailable,
-} = require("./unsplash-lib");
+} = require("../lib/index.js");
 
 require("dotenv").config();
 

@@ -83,6 +83,22 @@ unsplash-download
 unsplash-clean
 ```
 
+### Single Image Downloads
+
+```bash
+# Download individual images with size options
+unsplash-image-downloader "https://unsplash.com/photos/example-abc123"
+
+# Download specific size to custom directory
+unsplash-image-downloader "https://unsplash.com/photos/example-abc123" --size=full --output=./images
+
+# Download with custom dimensions and format
+unsplash-image-downloader "https://unsplash.com/photos/example-abc123" --size=custom --width=1920 --height=1080 --format=webp --quality=90
+
+# Download unwatermarked Unsplash+ image (with ixid)
+unsplash-image-downloader "https://unsplash.com/photos/example-abc123/download?ixid=M3wxMjA3fDB8MXxhbGx8fHx8fHx8fHwxNzU2MjU5NjgzfA&force=true"
+```
+
 ### Utilities
 
 ```bash
@@ -104,6 +120,8 @@ const {
   createPremiumUnsplashUrl,
   scanMdxFiles
 } = require('@nicholasadamou/unsplash-node-utilities');
+// Or directly from the library:
+// const { ... } = require('@nicholasadamou/unsplash-node-utilities/src/lib');
 
 // Extract photo ID from various URL formats
 const photoId = extractPhotoId('https://unsplash.com/photos/beautiful-sunset-abc123');
@@ -256,6 +274,44 @@ async function buildImageCache() {
   // Save manifest...
 }
 ```
+
+## Project Structure
+
+The project is organized as follows:
+
+```
+unsplash-node-utilities/
+├── src/
+│   ├── lib/           # Core library functionality
+│   │   └── index.js   # Main library exports
+│   ├── cli/           # Command-line interface tools
+│   │   ├── build-cache.js
+│   │   ├── cache.js
+│   │   ├── clean.js
+│   │   ├── download.js
+│   │   ├── image-downloader.js
+│   │   ├── url-to-download.js
+│   │   └── verify.js
+│   ├── tools/         # Development and debugging tools
+│   │   ├── browser-download.js
+│   │   ├── get-download-url.js
+│   │   ├── manual-download.js
+│   │   └── simulate-browser.js
+│   └── tests/         # Test files
+│       ├── download-url.test.js
+│       ├── fallback.test.js
+│       └── integration.test.js
+├── package.json
+├── README.md
+└── LICENSE
+```
+
+### Directory Purpose
+
+- **`src/lib/`** - Core library functionality exported as the main module
+- **`src/cli/`** - Executable scripts available as npm bin commands
+- **`src/tools/`** - Development tools for debugging and testing
+- **`src/tests/`** - Test suites for validating functionality
 
 ## Contributing
 

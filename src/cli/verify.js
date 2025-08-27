@@ -17,7 +17,7 @@ const {
   logInfo,
   makeApiRequest,
   checkFetchAvailable,
-} = require("./unsplash-lib");
+} = require("../lib/index.js");
 
 require("dotenv").config();
 

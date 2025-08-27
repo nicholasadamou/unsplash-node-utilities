@@ -321,6 +321,47 @@ async function triggerDownloadTracking(photoId) {
   }
 }
 
+/**
+ * Get unwatermarked download URL with ixid from Unsplash API
+ * @param {string} photoId - The photo ID
+ * @returns {Promise<object>} - Object with download URL and ixid
+ */
+async function getUnwatermarkedDownloadUrl(photoId) {
+  try {
+    console.log(`🔄 Getting unwatermarked download URL for: ${photoId}`);
+    const response = await fetch(`https://api.unsplash.com/photos/${photoId}/download`, {
+      headers: {
+        Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.log(`❌ Download API error for ${photoId}: ${response.status} ${response.statusText}`);
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+
+    const data = await response.json();
+    if (!data.url) {
+      return { success: false, error: 'No download URL returned from API' };
+    }
+
+    // Extract ixid from the returned download URL
+    const ixid = extractIxidFromUrl(data.url);
+    
+    return {
+      success: true,
+      downloadUrl: data.url,
+      ixid: ixid,
+      hasIxid: !!ixid
+    };
+  } catch (error) {
+    console.log(`❌ Error getting download URL for ${photoId}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 // =============================================================================
 // FILE SYSTEM UTILITIES
 // =============================================================================
@@ -606,6 +647,7 @@ module.exports = {
   makeApiRequest,
   fetchImageData,
   triggerDownloadTracking,
+  getUnwatermarkedDownloadUrl,
 
   // File system utilities
   scanMdxFiles,

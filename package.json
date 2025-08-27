@@ -2,28 +2,31 @@
   "name": "@nicholasadamou/unsplash-node-utilities",
   "version": "1.0.0",
   "description": "Node.js utilities for Unsplash image management, caching, and bulk downloading",
-  "main": "unsplash/unsplash-lib.js",
+  "main": "src/lib/index.js",
   "type": "commonjs",
   "engines": {
     "node": ">=18.0.0"
   },
   "bin": {
-    "unsplash-cache": "./unsplash/cache-unsplash-images.js",
-    "unsplash-verify": "./unsplash/verify-unsplash-account.js",
-    "unsplash-url-to-download": "./unsplash/unsplash-url-to-download.js",
-    "unsplash-build-cache": "./build-cache-images.js",
-    "unsplash-download": "./download-images.js",
-    "unsplash-clean": "./clean-images.js"
+    "unsplash-cache": "./src/cli/cache.js",
+    "unsplash-verify": "./src/cli/verify.js",
+    "unsplash-url-to-download": "./src/cli/url-to-download.js",
+    "unsplash-build-cache": "./src/cli/build-cache.js",
+    "unsplash-download": "./src/cli/download.js",
+    "unsplash-clean": "./src/cli/clean.js",
+    "unsplash-image-downloader": "./src/cli/image-downloader.js"
   },
   "scripts": {
-    "test": "node test-integration.js",
-    "test:fallback": "node test-fallback.js",
-    "cache:build": "node build-cache-images.js",
-    "cache:runtime": "node unsplash/cache-unsplash-images.js",
-    "download": "node download-images.js",
-    "clean": "node clean-images.js",
-    "verify": "node unsplash/verify-unsplash-account.js",
-    "url-to-download": "node unsplash/unsplash-url-to-download.js"
+    "test": "node src/tests/integration.test.js",
+    "test:fallback": "node src/tests/fallback.test.js",
+    "test:download-url": "node src/tests/download-url.test.js",
+    "cache:build": "node src/cli/build-cache.js",
+    "cache:runtime": "node src/cli/cache.js",
+    "download": "node src/cli/download.js",
+    "clean": "node src/cli/clean.js",
+    "verify": "node src/cli/verify.js",
+    "url-to-download": "node src/cli/url-to-download.js",
+    "image-downloader": "node src/cli/image-downloader.js"
   },
   "keywords": [
     "unsplash",
@@ -52,8 +55,7 @@
     "ioredis": "^5.7.0"
   },
   "files": [
-    "unsplash/",
-    "*.js",
+    "src/",
     "README.md",
     "LICENSE"
   ]

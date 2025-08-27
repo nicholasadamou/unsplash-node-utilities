@@ -14,7 +14,7 @@ const {
   scanMdxFiles,
   fetchImageData,
   checkFetchAvailable,
-} = require("./unsplash/unsplash-lib");
+} = require("../lib/index.js");
 
 require("dotenv").config();
 
