@@ -17,12 +17,46 @@ const {
 
 require("dotenv").config();
 
+// Check if image is already cached
+async function isImageCached(photoId, existingManifest) {
+  // Check static manifest first
+  if (existingManifest && existingManifest.images && existingManifest.images[photoId]) {
+    return { cached: true, source: 'manifest', data: existingManifest.images[photoId] };
+  }
+  
+  // Check runtime cache via API
+  try {
+    const response = await fetch(
+      `http://localhost:3000/api/cache?action=check&id=${photoId}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.cached) {
+        return { cached: true, source: 'runtime', data: data.data };
+      }
+    }
+  } catch (error) {
+    // If cache check fails, proceed with normal caching
+    console.log(`⚠️  Could not check cache status for ${photoId}: ${error.message}`);
+  }
+  
+  return { cached: false };
+}
+
 // Call local API to cache images
-async function cacheImage(imageUrl) {
+async function cacheImage(imageUrl, existingManifest = null) {
   const photoId = extractUnsplashPhotoId(imageUrl);
   if (!photoId) {
     console.log(`⚠️  Could not extract photo ID from: ${imageUrl}`);
     return false;
+  }
+
+  // Check if already cached
+  const cacheStatus = await isImageCached(photoId, existingManifest);
+  if (cacheStatus.cached) {
+    console.log(`✅ Already cached: ${photoId} (from ${cacheStatus.source})`);
+    return true;
   }
 
   try {
@@ -58,6 +92,7 @@ import { unsplashCache } from "@/lib/cache/unsplash-cache";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
+  const id = searchParams.get("id");
 
   try {
     switch (action) {
@@ -73,6 +108,23 @@ export async function GET(request: NextRequest) {
         });
       }
       
+      case "check": {
+        if (!id) {
+          return NextResponse.json(
+            { error: "ID parameter is required for check action" },
+            { status: 400 }
+          );
+        }
+        
+        // Check if the image is in runtime cache
+        const cachedData = await unsplashCache.get(id);
+        
+        return NextResponse.json({
+          cached: !!cachedData,
+          data: cachedData || null,
+        });
+      }
+      
       case "clear": {
         await unsplashCache.clearCache();
         return NextResponse.json({ message: "Cache cleared successfully" });
@@ -80,7 +132,7 @@ export async function GET(request: NextRequest) {
       
       default:
         return NextResponse.json(
-          { error: "Invalid action. Supported: stats, clear" },
+          { error: "Invalid action. Supported: stats, check, clear" },
           { status: 400 }
         );
     }
@@ -128,6 +180,20 @@ async function main() {
 
   console.log("✅ Development server is running");
 
+  // Check if manifest already exists
+  const manifestPath = path.join(process.cwd(), "public", "unsplash-manifest.json");
+  let existingManifest = null;
+  
+  try {
+    const manifestContent = await fs.readFile(manifestPath, "utf-8");
+    existingManifest = JSON.parse(manifestContent);
+    const existingCount = existingManifest.images ? Object.keys(existingManifest.images).length : 0;
+    console.log(`📋 Found existing manifest with ${existingCount} cached images`);
+  } catch (error) {
+    // Manifest doesn't exist or can't be read, which is fine
+    console.log("📋 No existing manifest found or it couldn't be read");
+  }
+
   // Create cache management API
   await addCacheManagementEndpoint();
 
@@ -151,7 +217,7 @@ async function main() {
   let failed = 0;
 
   for (const imageUrl of imageUrls) {
-    const success = await cacheImage(imageUrl);
+    const success = await cacheImage(imageUrl, existingManifest);
     if (success) {
       cached++;
     } else {
