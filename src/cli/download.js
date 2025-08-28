@@ -199,7 +199,7 @@ async function createManifest(results, originalManifest) {
       item.filepath
     );
     manifest.images[item.photoId] = {
-      local_path: `/${relativePath.replace(/\\/g, "/")}/`,
+      local_path: `/${relativePath.replace(/\\/g, "/")}`, // Ensure forward slashes for web
       skipped: true,
       reason: item.reason,
     };
