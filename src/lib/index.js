@@ -6,8 +6,10 @@
  */
 
 const fs = require("fs").promises;
+const { createWriteStream } = require("fs");
 const path = require("path");
 const https = require("https");
+const { pipeline } = require("stream/promises");
 const { URL } = require("url");
 
 // Configuration constants
@@ -33,6 +35,22 @@ function extractPhotoId(url) {
   // Clean the URL by removing any trailing punctuation
   const cleanUrl = url.replace(/["'.,;:!?]+$/, "");
 
+  // Handle plus.unsplash.com URLs: https://plus.unsplash.com/premium_photo-1679355751483-edb1fa0d8336
+  const plusUrlMatch = cleanUrl.match(
+    /https:\/\/plus\.unsplash\.com\/premium_photo-([a-zA-Z0-9_-]+)(?:[\?#]|$)/
+  );
+  if (plusUrlMatch) {
+    return plusUrlMatch[1];
+  }
+
+  // Handle plus.unsplash.com with direct image IDs: https://plus.unsplash.com/{id}
+  const plusSimpleMatch = cleanUrl.match(
+    /https:\/\/plus\.unsplash\.com\/([a-zA-Z0-9_-]{11})(?:[\?#]|$)/
+  );
+  if (plusSimpleMatch) {
+    return plusSimpleMatch[1];
+  }
+
   // Handle page URLs: https://unsplash.com/photos/{slug}-{id}
   const pageUrlMatch = cleanUrl.match(
     /https:\/\/unsplash\.com\/photos\/.*-([a-zA-Z0-9_-]{11})(?:[\?#]|$)/
@@ -47,6 +65,14 @@ function extractPhotoId(url) {
   );
   if (simplePageMatch) {
     return simplePageMatch[1];
+  }
+
+  // Handle download URLs: https://unsplash.com/photos/{id}/download
+  const downloadUrlMatch = cleanUrl.match(
+    /https:\/\/unsplash\.com\/photos\/([a-zA-Z0-9_-]{11})\/download(?:[\?#]|$)/
+  );
+  if (downloadUrlMatch) {
+    return downloadUrlMatch[1];
   }
 
   // Handle URLs where the ID is at the end of the path (without slug)
@@ -349,7 +375,7 @@ async function getUnwatermarkedDownloadUrl(photoId) {
 
     // Extract ixid from the returned download URL
     const ixid = extractIxidFromUrl(data.url);
-    
+
     return {
       success: true,
       downloadUrl: data.url,
@@ -359,6 +385,253 @@ async function getUnwatermarkedDownloadUrl(photoId) {
   } catch (error) {
     console.log(`❌ Error getting download URL for ${photoId}: ${error.message}`);
     return { success: false, error: error.message };
+  }
+}
+
+// =============================================================================
+// DOWNLOAD UTILITIES
+// =============================================================================
+
+/**
+ * Download an image from an Unsplash download URL with support for custom size, format, and quality
+ * @param {string} photoId - The Unsplash photo ID
+ * @param {string} [ixid] - Optional ixid parameter for unwatermarked download
+ * @param {object} [options] - Download options
+ * @param {string} [options.outputDir='./downloads'] - Directory to save the image
+ * @param {string} [options.filename] - Custom filename (without extension)
+ * @param {string} [options.size='regular'] - Image size: raw, full, regular, small, thumb, custom
+ * @param {string} [options.format='jpg'] - Image format: jpg, png, webp
+ * @param {number} [options.quality=80] - Image quality 1-100
+ * @param {number} [options.width] - Custom width (required for size=custom)
+ * @param {number} [options.height] - Custom height (required for size=custom)
+ * @param {number} [options.timeout=30000] - Download timeout in milliseconds
+ * @param {number} [options.retries=3] - Number of download retry attempts
+ * @returns {Promise<object>} - Download result with success status and file info
+ */
+async function downloadUnsplashImage(photoId, ixid = null, options = {}) {
+  // Default options
+  const downloadOptions = {
+    outputDir: options.outputDir || './downloads',
+    filename: options.filename,
+    size: options.size || 'regular',
+    format: options.format || 'jpg',
+    quality: options.quality || 80,
+    width: options.width,
+    height: options.height,
+    timeout: options.timeout || 30000, // 30 seconds
+    retries: options.retries || 3,
+  };
+
+  // Validate custom size options
+  if (downloadOptions.size === 'custom' && (!downloadOptions.width || !downloadOptions.height)) {
+    return {
+      success: false,
+      error: 'Custom size requires both width and height parameters',
+      photoId
+    };
+  }
+
+  // Determine the download URL based on options
+  let downloadUrl;
+  let finalIxid = ixid;
+
+  try {
+    if (downloadOptions.size === 'regular' && downloadOptions.format === 'jpg' && downloadOptions.quality === 80 && ixid) {
+      // Use the simple download URL for default settings with ixid
+      downloadUrl = generateDownloadUrl(photoId, ixid);
+    } else {
+      // Fetch image data to get size-specific URLs and apply custom parameters
+      const imageData = await fetchImageData(photoId);
+      if (!imageData || !imageData.urls) {
+        // Fallback to basic download URL if API fails
+        downloadUrl = generateDownloadUrl(photoId, ixid);
+      } else {
+        // Get the base URL for the requested size
+        let baseUrl;
+        switch (downloadOptions.size) {
+          case 'raw':
+            baseUrl = imageData.urls.raw;
+            break;
+          case 'full':
+            baseUrl = imageData.urls.full;
+            break;
+          case 'regular':
+            baseUrl = imageData.urls.regular;
+            break;
+          case 'small':
+            baseUrl = imageData.urls.small;
+            break;
+          case 'thumb':
+            baseUrl = imageData.urls.thumb;
+            break;
+          case 'custom':
+            baseUrl = imageData.urls.raw; // Start with raw for custom sizing
+            break;
+          default:
+            baseUrl = imageData.urls.regular;
+        }
+
+        // Check if we can extract ixid from API response (for unwatermarked images)
+        if (!finalIxid) {
+          const urlsToCheck = [
+            imageData.urls.raw,
+            imageData.urls.full,
+            imageData.urls.regular,
+            imageData.optimized_url
+          ];
+          
+          for (const url of urlsToCheck) {
+            if (!url) continue;
+            const foundIxid = extractIxidFromUrl(url);
+            if (foundIxid) {
+              finalIxid = foundIxid;
+              break;
+            }
+          }
+        }
+
+        // Apply custom parameters to the URL
+        if (downloadOptions.size === 'custom' || downloadOptions.format !== 'jpg' || downloadOptions.quality !== 80) {
+          const url = new URL(baseUrl);
+          
+          if (downloadOptions.size === 'custom') {
+            url.searchParams.set('w', downloadOptions.width.toString());
+            url.searchParams.set('h', downloadOptions.height.toString());
+            url.searchParams.set('fit', 'crop');
+            url.searchParams.set('crop', 'entropy');
+          }
+          
+          if (downloadOptions.format !== 'jpg') {
+            url.searchParams.set('fm', downloadOptions.format);
+          }
+          
+          if (downloadOptions.quality !== 80) {
+            url.searchParams.set('q', downloadOptions.quality.toString());
+          }
+          
+          downloadUrl = url.toString();
+        } else {
+          downloadUrl = baseUrl;
+        }
+      }
+    }
+  } catch (error) {
+    // Fallback to basic download URL if anything fails
+    downloadUrl = generateDownloadUrl(photoId, ixid);
+  }
+
+  // Determine file extension based on format
+  const fileExtension = downloadOptions.format === 'jpeg' ? 'jpg' : downloadOptions.format;
+
+  // Generate filename (either custom or based on photoId)
+  let filename;
+  if (downloadOptions.filename) {
+    filename = `${sanitizeFilename(downloadOptions.filename)}.${fileExtension}`;
+  } else {
+    let baseFilename = sanitizeFilename(photoId);
+    
+    // Add size info to filename
+    if (downloadOptions.size === 'custom') {
+      baseFilename += `_${downloadOptions.width}x${downloadOptions.height}`;
+    } else if (downloadOptions.size !== 'regular') {
+      baseFilename += `_${downloadOptions.size}`;
+    }
+    
+    filename = `unsplash-${baseFilename}.${fileExtension}`;
+  }
+
+  // Create full filepath
+  let filepath = path.join(downloadOptions.outputDir, filename);
+
+  // Ensure output directory exists
+  await fs.mkdir(path.dirname(filepath), { recursive: true }).catch(err => {
+    if (err.code !== 'EEXIST') throw err;
+  });
+
+  // Download the image with retry logic
+  for (let attempt = 1; attempt <= downloadOptions.retries; attempt++) {
+    try {
+      // Set up timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(), 
+        downloadOptions.timeout
+      );
+
+      // Fetch the image
+      const response = await fetch(downloadUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Unsplash-Node-Utilities/1.0)',
+          'Accept': 'image/*,*/*;q=0.8',
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Get content type for file extension validation
+      const contentType = response.headers.get('content-type');
+      let detectedExtension = fileExtension; // use requested format as default
+      
+      if (contentType) {
+        if (contentType.includes('png')) detectedExtension = 'png';
+        else if (contentType.includes('webp')) detectedExtension = 'webp';
+        else if (contentType.includes('jpeg') || contentType.includes('jpg')) detectedExtension = 'jpg';
+      }
+
+      // Update filepath with correct extension if needed
+      const currentExt = path.extname(filepath).slice(1);
+      if (currentExt !== detectedExtension) {
+        filepath = filepath.replace(path.extname(filepath), `.${detectedExtension}`);
+      }
+
+      // Stream the image to file
+      const fileStream = createWriteStream(filepath);
+      await pipeline(response.body, fileStream);
+
+      // Get file size for reporting
+      const stats = await fs.stat(filepath);
+      const sizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
+
+      return { 
+        success: true, 
+        filepath,
+        size: stats.size,
+        sizeFormatted: `${sizeInMB} MB`,
+        url: downloadUrl,
+        hasIxid: !!finalIxid,
+        downloadOptions: {
+          size: downloadOptions.size,
+          format: downloadOptions.format,
+          quality: downloadOptions.quality,
+          width: downloadOptions.width,
+          height: downloadOptions.height
+        }
+      };
+    } catch (error) {
+      if (attempt === downloadOptions.retries) {
+        return {
+          success: false,
+          error: error.message,
+          filepath,
+          url: downloadUrl,
+          downloadOptions: {
+            size: downloadOptions.size,
+            format: downloadOptions.format,
+            quality: downloadOptions.quality,
+            width: downloadOptions.width,
+            height: downloadOptions.height
+          }
+        };
+      }
+
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
   }
 }
 
@@ -648,6 +921,9 @@ module.exports = {
   fetchImageData,
   triggerDownloadTracking,
   getUnwatermarkedDownloadUrl,
+
+  // Download utilities
+  downloadUnsplashImage,
 
   // File system utilities
   scanMdxFiles,
