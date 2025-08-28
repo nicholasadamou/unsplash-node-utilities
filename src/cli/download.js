@@ -158,9 +158,9 @@ async function downloadImagesBatch(imageEntries, progressBar) {
   return results;
 }
 
-// Create a local manifest mapping photo IDs to local file paths
-async function createLocalManifest(results, originalManifest) {
-  const localManifest = {
+// Create a manifest mapping photo IDs to local file paths
+async function createManifest(results, originalManifest) {
+  const manifest = {
     generated_at: new Date().toISOString(),
     version: "1.0.0",
     source_manifest: originalManifest.generated_at,
@@ -182,7 +182,7 @@ async function createLocalManifest(results, originalManifest) {
       path.join(process.cwd(), "public"),
       item.filepath
     );
-    localManifest.images[item.photoId] = {
+    manifest.images[item.photoId] = {
       local_path: `/${relativePath.replace(/\\/g, "/")}`, // Ensure forward slashes for web
       download_url: item.url,
       optimized_url: item.original_url,
@@ -198,20 +198,20 @@ async function createLocalManifest(results, originalManifest) {
       path.join(process.cwd(), "public"),
       item.filepath
     );
-    localManifest.images[item.photoId] = {
-      local_path: `/${relativePath.replace(/\\/g, "/")}`,
+    manifest.images[item.photoId] = {
+      local_path: `/${relativePath.replace(/\\/g, "/")}/`,
       skipped: true,
       reason: item.reason,
     };
   });
 
-  const localManifestPath = path.join(
+  const manifestPath = path.join(
     CONFIG.downloadDir,
-    "local-manifest.json"
+    "manifest.json"
   );
-  await fs.writeFile(localManifestPath, JSON.stringify(localManifest, null, 2));
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 
-  return { localManifest, localManifestPath };
+  return { manifest, manifestPath };
 }
 
 // Main function
@@ -258,8 +258,8 @@ async function main() {
   const results = await downloadImagesBatch(imageEntries, progressBar);
 
   // Create local manifest
-  console.log("\n📝 Creating local manifest...");
-  const { localManifest, localManifestPath } = await createLocalManifest(
+  console.log("\n📝 Creating manifest...");
+  const { manifest: localManifest, manifestPath } = await createManifest(
     results,
     manifest
   );
@@ -291,7 +291,7 @@ async function main() {
   const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2);
   console.log(`\n💾 Storage Used: ${sizeInMB} MB`);
   console.log(
-    `📄 Local manifest created: ${path.relative(process.cwd(), localManifestPath)}`
+    `📄 Manifest created: ${path.relative(process.cwd(), manifestPath)}`
   );
 
   console.log("\n🎉 Image download complete!");
